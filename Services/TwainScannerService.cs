@@ -284,14 +284,30 @@ namespace LocalScanServiceV2.Services
                 // 处理TWAIN扫描完成事件
                 EventHandler<TwainDotNet.TransferImageEventArgs> transferImageHandler = (sender, e) =>
                 {
-                    if (e.Image != null)
+                    Console.WriteLine("TransferImage事件触发...");
+                    if (e != null)
                     {
-                        images.Add(e.Image);
-                        Console.WriteLine($"获取到一张图像: {e.Image.Width}x{e.Image.Height}");
+                        Console.WriteLine("TransferImage事件参数不为空...");
+                        if (e.Image != null)
+                        {
+                            Console.WriteLine($"获取到一张图像: {e.Image.Width}x{e.Image.Height}");
+                            images.Add(e.Image);
+                            Console.WriteLine($"图像已添加到列表，当前数量: {images.Count}");
+                        }
+                        else
+                        {
+                            Console.WriteLine("TransferImage事件参数的Image为空...");
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("TransferImage事件参数为空...");
                     }
                 };
                 
+                Console.WriteLine("注册TransferImage事件处理器...");
                 _twain.TransferImage += transferImageHandler;
+                Console.WriteLine("TransferImage事件处理器注册完成...");
 
                 try
                 {
@@ -307,26 +323,57 @@ namespace LocalScanServiceV2.Services
                     Console.WriteLine("TWAIN扫描设置: ShowTwainUI={0}, UseDocumentFeeder={1}, ShouldTransferAllPages={2}", 
                         scanSettings.ShowTwainUI, scanSettings.UseDocumentFeeder, scanSettings.ShouldTransferAllPages);
                     
-                    // 启动扫描
-                    _twain.StartScanning(scanSettings);
-                    Console.WriteLine("TWAIN扫描启动...");
+                    // 创建一个事件来等待扫描完成
+                    var scanCompleteEvent = new System.Threading.ManualResetEvent(false);
                     
-                    // 当ShowTwainUI=true时，StartScanning会阻塞直到用户完成操作
-                    // 此时TWAIN驱动应该已经通过TransferImage事件传输所有图像
-                    
-                    // 等待一小段时间，确保所有事件都已处理完成
-                    System.Threading.Thread.Sleep(2000);
-                    
-                    // 检查是否有图像获取到
-                    if (images.Count > 0)
+                    // 启动扫描在一个新线程中，以便UI能够响应
+                    System.Threading.Thread scanThread = new System.Threading.Thread(() =>
                     {
-                        Console.WriteLine("TWAIN扫描成功获取到图像");
-                        Console.WriteLine($"共获取到 {images.Count} 张图像");
+                        try
+                        {
+                            Console.WriteLine("TWAIN扫描线程启动...");
+                            _twain.StartScanning(scanSettings);
+                            Console.WriteLine("TWAIN扫描线程完成...");
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"TWAIN扫描线程异常: {ex.Message}");
+                        }
+                        finally
+                        {
+                            // 通知主线程扫描已完成
+                            scanCompleteEvent.Set();
+                            Console.WriteLine("TWAIN扫描完成事件已设置...");
+                        }
+                    });
+                    
+                    // 启动扫描线程
+                    scanThread.Start();
+                    Console.WriteLine("TWAIN扫描线程已启动...");
+                    
+                    // 等待扫描完成，最多等待60秒
+                    Console.WriteLine("等待TWAIN扫描完成...");
+                    if (scanCompleteEvent.WaitOne(60000))
+                    {
+                        Console.WriteLine("TWAIN扫描完成，等待事件处理...");
+                        // 等待一小段时间，确保所有事件都已处理完成
+                        System.Threading.Thread.Sleep(2000);
+                        
+                        // 检查是否有图像获取到
+                        if (images.Count > 0)
+                        {
+                            Console.WriteLine("TWAIN扫描成功获取到图像");
+                            Console.WriteLine($"共获取到 {images.Count} 张图像");
+                        }
+                        else
+                        {
+                            Console.WriteLine("TWAIN扫描完成但未获取到图像");
+                            Console.WriteLine($"共获取到 {images.Count} 张图像");
+                        }
                     }
                     else
                     {
-                        Console.WriteLine("TWAIN扫描完成但未获取到图像");
-                        Console.WriteLine($"共获取到 {images.Count} 张图像");
+                        Console.WriteLine("TWAIN扫描超时");
                     }
                 }
                 catch (Exception ex)
