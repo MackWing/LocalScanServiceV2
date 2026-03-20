@@ -28,10 +28,13 @@ namespace LocalScanServiceV2.Services
                 var className = "TwainMessageWindow" + Guid.NewGuid().ToString();
                 var hInstance = System.Runtime.InteropServices.Marshal.GetHINSTANCE(typeof(SimpleWindowsMessageHook).Module);
 
+                // 保存委托引用，防止垃圾回收
+                _wndProcDelegate = WndProc;
+
                 // 注册窗口类
                 var wndClass = new WNDCLASS
                 {
-                    lpfnWndProc = WndProc,
+                    lpfnWndProc = _wndProcDelegate,
                     hInstance = hInstance,
                     lpszClassName = className
                 };
@@ -81,6 +84,9 @@ namespace LocalScanServiceV2.Services
             // 处理TWAIN消息
             return DefWindowProc(hWnd, msg, wParam, lParam);
         }
+
+        // 保存委托引用，防止垃圾回收
+        private WndProcDelegate _wndProcDelegate;
 
         // Windows API 声明
         private delegate IntPtr WndProcDelegate(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
@@ -301,8 +307,23 @@ namespace LocalScanServiceV2.Services
                     Console.WriteLine("TWAIN扫描设置: ShowTwainUI={0}, UseDocumentFeeder={1}, ShouldTransferAllPages={2}", 
                         scanSettings.ShowTwainUI, scanSettings.UseDocumentFeeder, scanSettings.ShouldTransferAllPages);
                     
+                    // 启动扫描
                     _twain.StartScanning(scanSettings);
-                    Console.WriteLine("TWAIN扫描完成");
+                    Console.WriteLine("TWAIN扫描启动...");
+                    
+                    // 等待一段时间，确保TWAIN UI有足够时间处理
+                    System.Threading.Thread.Sleep(1000);
+                    
+                    // 检查是否有图像获取到
+                    if (images.Count > 0)
+                    {
+                        Console.WriteLine("TWAIN扫描成功获取到图像");
+                    }
+                    else
+                    {
+                        Console.WriteLine("TWAIN扫描完成但未获取到图像");
+                    }
+                    
                     Console.WriteLine($"共获取到 {images.Count} 张图像");
                 }
                 catch (Exception ex)
