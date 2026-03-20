@@ -311,20 +311,23 @@ namespace LocalScanServiceV2.Services
                     _twain.StartScanning(scanSettings);
                     Console.WriteLine("TWAIN扫描启动...");
                     
-                    // 等待一段时间，确保TWAIN UI有足够时间处理
-                    System.Threading.Thread.Sleep(1000);
+                    // 当ShowTwainUI=true时，StartScanning会阻塞直到用户完成操作
+                    // 此时TWAIN驱动应该已经通过TransferImage事件传输所有图像
+                    
+                    // 等待一小段时间，确保所有事件都已处理完成
+                    System.Threading.Thread.Sleep(2000);
                     
                     // 检查是否有图像获取到
                     if (images.Count > 0)
                     {
                         Console.WriteLine("TWAIN扫描成功获取到图像");
+                        Console.WriteLine($"共获取到 {images.Count} 张图像");
                     }
                     else
                     {
                         Console.WriteLine("TWAIN扫描完成但未获取到图像");
+                        Console.WriteLine($"共获取到 {images.Count} 张图像");
                     }
-                    
-                    Console.WriteLine($"共获取到 {images.Count} 张图像");
                 }
                 catch (Exception ex)
                 {
