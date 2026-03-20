@@ -64,12 +64,14 @@ namespace LocalScanServiceV2.Services
         public void Enable()
         {
             // 启用消息钩子
+            UseFilter = true;
             Console.WriteLine("启用TWAIN消息钩子");
         }
 
         public void Disable()
         {
             // 禁用消息钩子
+            UseFilter = false;
             Console.WriteLine("禁用TWAIN消息钩子");
         }
 
@@ -119,6 +121,7 @@ namespace LocalScanServiceV2.Services
             {
                 // 创建消息钩子
                 _messageHook = new SimpleWindowsMessageHook();
+                Console.WriteLine("创建TWAIN消息钩子成功");
                 
                 // 初始化TWAIN
                 _twain = new TwainDotNet.Twain(_messageHook);
@@ -127,6 +130,7 @@ namespace LocalScanServiceV2.Services
             catch (Exception ex)
             {
                 Console.WriteLine($"TWAIN接口初始化失败: {ex.Message}");
+                Console.WriteLine($"堆栈跟踪: {ex.StackTrace}");
                 _twain = null;
             }
         }
@@ -268,8 +272,11 @@ namespace LocalScanServiceV2.Services
                 Console.WriteLine("开始执行TWAIN扫描...");
                 var images = new List<Bitmap>();
                 
+                // 先移除之前的事件处理器，避免重复注册
+                _twain.TransferImage -= (sender, e) => { };
+                
                 // 处理TWAIN扫描完成事件
-                _twain.TransferImage += (sender, e) =>
+                EventHandler<TwainDotNet.TransferImageEventArgs> transferImageHandler = (sender, e) =>
                 {
                     if (e.Image != null)
                     {
@@ -277,6 +284,8 @@ namespace LocalScanServiceV2.Services
                         Console.WriteLine($"获取到一张图像: {e.Image.Width}x{e.Image.Height}");
                     }
                 };
+                
+                _twain.TransferImage += transferImageHandler;
 
                 try
                 {
@@ -289,11 +298,18 @@ namespace LocalScanServiceV2.Services
                     scanSettings.ShouldTransferAllPages = true;
                     
                     Console.WriteLine("准备开始TWAIN扫描...");
+                    Console.WriteLine("TWAIN扫描设置: ShowTwainUI={0}, UseDocumentFeeder={1}, ShouldTransferAllPages={2}", 
+                        scanSettings.ShowTwainUI, scanSettings.UseDocumentFeeder, scanSettings.ShouldTransferAllPages);
+                    
                     _twain.StartScanning(scanSettings);
                     Console.WriteLine("TWAIN扫描完成");
+                    Console.WriteLine($"共获取到 {images.Count} 张图像");
                 }
                 catch (Exception ex)
                 {
+                    // 移除事件处理器
+                    _twain.TransferImage -= transferImageHandler;
+                    
                     if (ex.Message.Contains("cancel"))
                     {
                         response.Success = false;
@@ -314,12 +330,18 @@ namespace LocalScanServiceV2.Services
                     }
                     throw;
                 }
+                finally
+                {
+                    // 确保移除事件处理器
+                    _twain.TransferImage -= transferImageHandler;
+                }
 
                 if (images.Count == 0)
                 {
                     response.Success = false;
                     response.ErrorCode = "NO_IMAGES_SCANNED";
-                    response.ErrorMessage = "扫描完成但未获取到图像\n\n请尝试以下解决方案：\n1. 确保有文档放置在扫描区域\n2. 检查扫描仪的进纸器是否正常\n3. 尝试手动放置文档";
+                    response.ErrorMessage = "扫描完成但未获取到图像\n\n请尝试以下解决方案：\n1. 确保有文档放置在扫描区域\n2. 检查扫描仪的进纸器是否正常\n3. 尝试手动放置文档\n4. 检查TWAIN驱动程序是否正确安装\n5. 尝试重启扫描仪和计算机";
+                    Console.WriteLine("TWAIN扫描完成但未获取到图像");
                     return response;
                 }
 
