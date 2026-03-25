@@ -325,6 +325,7 @@ namespace LocalScanServiceV2.Services
                     
                     // 创建一个事件来等待扫描完成
                     var scanCompleteEvent = new System.Threading.ManualResetEvent(false);
+                    Exception scanException = null;
                     
                     // 启动扫描在一个新线程中，以便UI能够响应
                     System.Threading.Thread scanThread = new System.Threading.Thread(() =>
@@ -338,6 +339,8 @@ namespace LocalScanServiceV2.Services
                         catch (Exception ex)
                         {
                             Console.WriteLine($"TWAIN扫描线程异常: {ex.Message}");
+                            Console.WriteLine($"堆栈跟踪: {ex.StackTrace}");
+                            scanException = ex;
                         }
                         finally
                         {
@@ -356,6 +359,12 @@ namespace LocalScanServiceV2.Services
                     if (scanCompleteEvent.WaitOne(60000))
                     {
                         Console.WriteLine("TWAIN扫描完成，等待事件处理...");
+                        // 检查是否有异常发生
+                        if (scanException != null)
+                        {
+                            Console.WriteLine("TWAIN扫描线程发生异常，重新抛出...");
+                            throw scanException;
+                        }
                         // 等待一小段时间，确保所有事件都已处理完成
                         System.Threading.Thread.Sleep(2000);
                         
@@ -383,7 +392,17 @@ namespace LocalScanServiceV2.Services
                     
                     response.Success = false;
                     response.ErrorCode = "TWAIN_ERROR";
-                    response.ErrorMessage = $"TWAIN扫描错误: {ex.Message}\n\n请尝试以下解决方案：\n1. 确保扫描仪已正确连接并开启\n2. 确保TWAIN驱动程序已正确安装\n3. 确保扫描仪没有被其他程序占用\n4. 尝试重启扫描仪和计算机\n5. 检查科达扫描仪的TWAIN驱动程序是否最新\n6. 尝试使用厂商提供的扫描软件";
+                    
+                    // 针对"Error opening data source"错误提供更详细的解决方案
+                    if (ex.Message.Contains("Error opening data source"))
+                    {
+                        response.ErrorMessage = $"TWAIN扫描错误: {ex.Message}\n\n请尝试以下解决方案：\n1. 确保扫描仪已正确连接并开启电源\n2. 确保TWAIN驱动程序已正确安装且为最新版本\n3. 确保扫描仪没有被其他程序占用\n4. 尝试重启扫描仪和计算机\n5. 检查科达i2600扫描仪的TWAIN驱动程序是否支持当前操作系统\n6. 尝试使用科达官方提供的扫描软件测试设备\n7. 检查设备管理器中是否有驱动程序冲突\n8. 尝试重新安装TWAIN驱动程序";
+                    }
+                    else
+                    {
+                        response.ErrorMessage = $"TWAIN扫描错误: {ex.Message}\n\n请尝试以下解决方案：\n1. 确保扫描仪已正确连接并开启\n2. 确保TWAIN驱动程序已正确安装\n3. 确保扫描仪没有被其他程序占用\n4. 尝试重启扫描仪和计算机\n5. 检查科达扫描仪的TWAIN驱动程序是否最新\n6. 尝试使用厂商提供的扫描软件";
+                    }
+                    
                     Console.WriteLine($"TWAIN扫描错误: {ex.Message}");
                     Console.WriteLine($"堆栈跟踪: {ex.StackTrace}");
                     return response;
