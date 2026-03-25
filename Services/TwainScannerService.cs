@@ -376,6 +376,18 @@ namespace LocalScanServiceV2.Services
                         Console.WriteLine("TWAIN扫描超时");
                     }
                 }
+                catch (TwainDotNet.TwainException ex)
+                {
+                    // 移除事件处理器
+                    _twain.TransferImage -= transferImageHandler;
+                    
+                    response.Success = false;
+                    response.ErrorCode = "TWAIN_ERROR";
+                    response.ErrorMessage = $"TWAIN扫描错误: {ex.Message}\n\n请尝试以下解决方案：\n1. 确保扫描仪已正确连接并开启\n2. 确保TWAIN驱动程序已正确安装\n3. 确保扫描仪没有被其他程序占用\n4. 尝试重启扫描仪和计算机\n5. 检查科达扫描仪的TWAIN驱动程序是否最新\n6. 尝试使用厂商提供的扫描软件";
+                    Console.WriteLine($"TWAIN扫描错误: {ex.Message}");
+                    Console.WriteLine($"堆栈跟踪: {ex.StackTrace}");
+                    return response;
+                }
                 catch (Exception ex)
                 {
                     // 移除事件处理器
